@@ -1,0 +1,61 @@
+
+*.pem
+*.tfvars
+*.tfvars.json
+**/.terraform/
+
+# Node.js & Application Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+
+# React / Build Outputs
+/frontend/build/
+/frontend/dist/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+
+# Terraform State & Secrets
+# Local state files
+*.tfstate
+*.tfstate.*
+*.tfplan
+
+# Variable files containing secrets
+secrets.auto.tfvars
+*.tfvars
+
+# Crash logs & CLI overrides
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+
+# Terraform execution directory
+/terraform/.terraform/
+.terraform/
+
+# Dynamic lock files (optional, but keep .terraform.lock.hcl if you want exact provider versions)
+.terraform.lock.hcl
+
+
+# Keys, Certificates & Sensitive Files
+*.pem
+*.key
+*.crt
+id_rsa
+id_rsa.pub
+
+
+# OS & IDE System Artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
