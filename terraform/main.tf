@@ -1,4 +1,4 @@
-# to get the latest ami id of rhel 9 in specified region always
+# Get the latest RHEL 9 AMI in the specified region
 data "aws_ami" "rhel" {
   most_recent = true
   owners      = ["309956199498"] # Red Hat Official Account
@@ -78,7 +78,8 @@ resource "aws_subnet" "private_2" {
 # 3. Gateways & EIP
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "cloudops-igw" }
+
+  tags = { Name = "cloudops-igw" }
 }
 
 resource "aws_eip" "nat_eip" {
@@ -89,7 +90,8 @@ resource "aws_eip" "nat_eip" {
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat_eip.id
   subnet_id     = aws_subnet.public.id
-  tags          = { Name = "cloudops-nat-gateway" }
+
+  tags = { Name = "cloudops-nat-gateway" }
 }
 
 # 4. Route Tables
@@ -136,7 +138,8 @@ resource "aws_security_group" "k8s_sg" {
   description = "Unified Security Group for CloudOps Kubernetes Cluster"
   vpc_id      = aws_vpc.main.id
 
-  # Allow all internal cluster traffic between members
+  # Allow all traffic between Kubernetes cluster nodes.
+  # This is required for internal Kubernetes communication.
   ingress {
     from_port = 0
     to_port   = 0
@@ -144,15 +147,15 @@ resource "aws_security_group" "k8s_sg" {
     self      = true
   }
 
-  # Allow public SSH access
+  # [CHANGED] SSH is allowed only from the administrator's public IP.
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.admin_cidr]
   }
 
-  # Allow public HTTP access
+  # Public HTTP access.
   ingress {
     from_port   = 80
     to_port     = 80
@@ -160,7 +163,7 @@ resource "aws_security_group" "k8s_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Allow public HTTPS access
+  # Public HTTPS access.
   ingress {
     from_port   = 443
     to_port     = 443
@@ -168,7 +171,7 @@ resource "aws_security_group" "k8s_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # Allow React Application NodePort Access
+  # Public React application access through NodePort.
   ingress {
     from_port   = 30001
     to_port     = 30001
@@ -176,15 +179,15 @@ resource "aws_security_group" "k8s_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # OpenVPN UDP Server Port
+  # [CHANGED] OpenVPN is accessible only from the administrator's IP.
   ingress {
     from_port   = 1194
     to_port     = 1194
     protocol    = "udp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.admin_cidr]
   }
 
-  # Allow all outbound internet traffic
+  # Allow all outbound traffic.
   egress {
     from_port   = 0
     to_port     = 0
@@ -196,13 +199,25 @@ resource "aws_security_group" "k8s_sg" {
 }
 
 # 6. EC2 Instances
+
 resource "aws_instance" "k8s_master" {
-  ami                         = data.aws_ami.rhel.id
-  instance_type               = var.master_instance_type
-  subnet_id                   = aws_subnet.public.id
+  ami           = data.aws_ami.rhel.id
+  instance_type = var.master_instance_type
+  subnet_id     = aws_subnet.public.id
+
+  # [CHANGED] Static private IP used by Kubernetes and /etc/hosts.
+  private_ip = "10.0.1.10"
+
   vpc_security_group_ids      = [aws_security_group.k8s_sg.id]
   key_name                    = aws_key_pair.generated_key.key_name
   associate_public_ip_address = true
+
+  # [CHANGED] Terraform passes node IPs to the installation script.
+  user_data = templatefile("${path.module}/../scripts/install-deps.sh", {
+    master_private_ip   = "10.0.1.10"
+    worker_1_private_ip = "10.0.2.10"
+    worker_2_private_ip = "10.0.3.10"
+  })
 
   root_block_device {
     volume_size           = 40
@@ -214,11 +229,22 @@ resource "aws_instance" "k8s_master" {
 }
 
 resource "aws_instance" "k8s_worker_1" {
-  ami                    = data.aws_ami.rhel.id
-  instance_type          = var.worker_instance_type
-  subnet_id              = aws_subnet.private_1.id
+  ami           = data.aws_ami.rhel.id
+  instance_type = var.worker_instance_type
+  subnet_id     = aws_subnet.private_1.id
+
+  # [CHANGED] Static private IP used by Kubernetes and /etc/hosts.
+  private_ip = "10.0.2.10"
+
   vpc_security_group_ids = [aws_security_group.k8s_sg.id]
   key_name               = aws_key_pair.generated_key.key_name
+
+  # [CHANGED] Terraform passes node IPs to the installation script.
+  user_data = templatefile("${path.module}/../scripts/install-deps.sh", {
+    master_private_ip   = "10.0.1.10"
+    worker_1_private_ip = "10.0.2.10"
+    worker_2_private_ip = "10.0.3.10"
+  })
 
   root_block_device {
     volume_size           = 40
@@ -230,11 +256,22 @@ resource "aws_instance" "k8s_worker_1" {
 }
 
 resource "aws_instance" "k8s_worker_2" {
-  ami                    = data.aws_ami.rhel.id
-  instance_type          = var.worker_instance_type
-  subnet_id              = aws_subnet.private_2.id
+  ami           = data.aws_ami.rhel.id
+  instance_type = var.worker_instance_type
+  subnet_id     = aws_subnet.private_2.id
+
+  # [CHANGED] Static private IP used by Kubernetes and /etc/hosts.
+  private_ip = "10.0.3.10"
+
   vpc_security_group_ids = [aws_security_group.k8s_sg.id]
   key_name               = aws_key_pair.generated_key.key_name
+
+  # [CHANGED] Terraform passes node IPs to the installation script.
+  user_data = templatefile("${path.module}/../scripts/install-deps.sh", {
+    master_private_ip   = "10.0.1.10"
+    worker_1_private_ip = "10.0.2.10"
+    worker_2_private_ip = "10.0.3.10"
+  })
 
   root_block_device {
     volume_size           = 40

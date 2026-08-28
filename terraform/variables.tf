@@ -39,3 +39,8 @@ variable "key_name" {
   default     = "cloudops-key"
   description = "Name for the generated SSH Key Pair"
 }
+
+variable "admin_cidr" {
+  description = "Administrator public IP/CIDR allowed for SSH and OpenVPN"
+  type        = string
+}
